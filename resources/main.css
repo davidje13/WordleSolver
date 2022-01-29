@@ -1,0 +1,42 @@
+body {
+  font-family: sans-serif;
+}
+
+input[type=text], output {
+  display: block;
+  width: 20rem;
+  padding: 5px;
+  margin: 5px;
+  border: 1px solid gray;
+  border-radius: 3px;
+  font: 2rem monospace;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+}
+
+.result {
+  display: inline-block;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 3px;
+  margin: 2px;
+  font: 1.5rem monospace;
+  line-height: 2rem;
+  text-transform: uppercase;
+  vertical-align: middle;
+  text-align: center;
+  overflow: hidden;
+}
+
+.res-0 {
+  background: gray;
+  color: white;
+}
+.res-1 {
+  background: sandybrown;
+  color: black;
+}
+.res-2 {
+  background: yellowgreen;
+  color: black;
+}
