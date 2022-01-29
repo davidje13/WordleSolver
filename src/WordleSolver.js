@@ -128,11 +128,9 @@ function interpret(word) {
 const judge = (solutions, adversarial) => ([attempt, _, attemptLetterCountsList]) => {
   // judge for best ability to bisect solutions (on average since each solution has equal probability)
 
+  const count = solutions.length;
   const length = attempt.length;
   const letters = attemptLetterCountsList.length;
-
-  let positionMask = 0;
-  const counts = new Uint8Array(letters * 2);
 
   const precalcSolutions = solutions.map(([word, letterCounts]) => {
     let matchMask = 0;
@@ -143,34 +141,47 @@ const judge = (solutions, adversarial) => ([attempt, _, attemptLetterCountsList]
     return [matchMask, matchCounts];
   });
 
-  let sum = 0;
-  let max = 0;
-  for (const [actualPositionMask, actualLetterCounts] of precalcSolutions) {
-    positionMask = actualPositionMask;
+  const clusterSizes = [];
+  const counts = new Uint8Array(letters * 2);
+  for (let a = 0; a < count; ++a) {
+    if (!precalcSolutions[a]) {
+      continue;
+    }
+    const [actualPositionMask, actualLetterCounts] = precalcSolutions[a];
     for (let i = 0; i < letters; ++i) {
       const attemptN = attemptLetterCountsList[i][1];
       const actualN = actualLetterCounts[i];
       counts[i] = (attemptN > actualN) ? actualN : attemptN;
       counts[i + letters] = (attemptN > actualN);
     }
-    let count = 0;
-    for (const [possiblePositionMask, possibleLetterCounts] of precalcSolutions) {
-      if (positionMask !== possiblePositionMask) {
+    let clusterSize = 1;
+    for (let b = a + 1; b < count; ++b) {
+      if (!precalcSolutions[b]) {
         continue;
       }
-      let inc = 1;
+      const [possiblePositionMask, possibleLetterCounts] = precalcSolutions[b];
+      if (actualPositionMask !== possiblePositionMask) {
+        continue;
+      }
+      let match = true;
       for (let i = 0; i < letters; ++i) {
         const feedbackN = counts[i];
         const wordN = possibleLetterCounts[i];
         if (wordN < feedbackN || (wordN !== feedbackN && counts[i + letters])) {
-          inc = 0;
+          match = false;
           break;
         }
       }
-      count += inc;
+      if (match) {
+        ++clusterSize;
+        precalcSolutions[b] = null;
+      }
     }
-    sum += count;
-    max = (count > max) ? count : max;
+    clusterSizes.push(clusterSize);
   }
-  return adversarial ? max : (sum / solutions.length);
+  if (adversarial) {
+    return Math.max(...clusterSizes);
+  } else {
+    return clusterSizes.reduce((acc, v) => (acc + (v * v)), 0) / solutions.length;
+  }
 };
