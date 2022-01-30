@@ -10,14 +10,14 @@ class WordleSolver {
       throw new Error('No possible solutions');
     }
     this.length = data.solution[0].length;
+    // judge uses numbers to match clusters,
+    // and javascript numbers can store ints up to 2^53-1 (i.e. 52 bits).
+    // We use 1 bit per char to record exact matches,
+    // and log2(length) bits per letter (letters <= chars) to record counts,
+    // => total bits used = (1 + log2(length)) * length
+    // => max length = 11 chars
     if (this.length > 11) {
-      // judge uses numbers to match clusters,
-      // and javascript numbers can store ints up to 2^53-1 (i.e. 52 bits).
-      // We use 1 bit per char to record exact matches,
-      // and log2(length) bits per letter (letters <= chars) to record counts,
-      // => total bits used = (1 + log2(length)) * length
-      // => max length = 11 chars
-      throw new Error('unable to calculate exact solution for words this long!');
+      throw new Error('Unable to calculate exact solution for words this long!');
     }
     if (
       data.solution.some((word) => (word.length !== this.length)) ||
@@ -52,7 +52,7 @@ class WordleSolverGame {
     return this.solutions.map((v) => v.w);
   }
 
-  judgeGuess(word, finalGuess = false) {
+  judgeGuess(word, { finalGuess = false } = {}) {
     const check = this.allowed.find((v) => (v.w == word));
     if (!check) {
       throw new Error('Invalid guess word!');
@@ -60,28 +60,30 @@ class WordleSolverGame {
     if (finalGuess && !this.solutions.includes(check)) {
       return Number.POSITIVE_INFINITY; // bad choice for a final guess
     }
-    return judge(this.length, this.solutions, this.adversarial)(check);
+    return judge(this.length, this.solutions, this.adversarial)(check).s;
   }
 
-  judgeGuesses(finalGuess = false) {
-    const options = finalGuess ? this.solutions : this.allowed;
-    const j = judge(this.length, this.solutions, this.adversarial);
-    return options
-      .map((check) => [check.w, j(check)])
-      .sort((a, b) => (a[1] - b[1]));
+  judgeGuesses({ finalGuess = false } = {}) {
+    return (finalGuess ? this.solutions : this.allowed)
+      .map(judge(this.length, this.solutions, this.adversarial))
+      .sort((a, b) => (a.s - b.s));
   }
 
-  guess(finalGuess = false) {
-    // optimised version of return judgeGuesses(finalGuess)[0].w;
-
+  guess({ inferiorScoreThreshold = 0, ...options } = {}) {
     if (!this.solutions.length) {
       throw new Error('No possible solutions!');
     }
-    if (this.solutions.length <= 2) {
-      return randomElement(this.solutions).w;
+    const judged = this.judgeGuesses(options);
+
+    const scoreThreshold = judged[0].s + inferiorScoreThreshold;
+    let num = judged.length;
+    for (let n = 1; n < judged.length; ++n) {
+      if (judged[n].s > scoreThreshold) {
+        num = n;
+        break;
+      }
     }
-    const options = finalGuess ? this.solutions : this.allowed;
-    return minElementBy(options, judge(this.length, this.solutions, this.adversarial)).w;
+    return judged[Math.floor(Math.random() * num)].w;
   }
 
   feedback(attempt, match) {
@@ -127,25 +129,39 @@ function interpret(word) {
 }
 
 const judge = (length, solutions, adversarial) => (attempt) => {
+  const count = solutions.length;
   const attemptLetterCounts = attempt.x;
+  const letters = attemptLetterCounts.length;
+
   const clusters = new Map();
-  for (const s of solutions) {
+  for (let s = 0; s < count; ++s) {
+    const solution = solutions[s];
     let mask = 0;
     for (let i = 0; i < length; ++i) {
-      mask = (mask << 1) | (s.w[i] === attempt.w[i]);
+      mask = (mask << 1) | (solution.w[i] === attempt.w[i]);
     }
-    for (const lc of attemptLetterCounts) {
-      const wordCount = s.l.get(lc.c) ?? 0;
+    for (let i = 0; i < letters; ++i) {
+      const lc = attemptLetterCounts[i];
+      const wordCount = solution.l.get(lc.c) ?? 0;
       mask = (mask * length) + ((wordCount < lc.n) ? wordCount : lc.n);
     }
     clusters.set(mask, (clusters.get(mask) ?? 0) + 1);
   }
 
+  // if the word we guess solves the challenge, rate that as 0 instead of 1
+  let selfMask = (1 << length) - 1;
+  for (let i = 0; i < letters; ++i) {
+    selfMask = (selfMask * length) + attemptLetterCounts[i].n;
+  }
+  clusters.set(selfMask, 0);
+
   const clusterSizes = [...clusters.values()];
+  let score;
   if (adversarial) {
-    return Math.max(...clusterSizes);
+    score = Math.max(...clusterSizes);
   } else {
     // judge for best ability to bisect solutions (on average since each solution has equal probability)
-    return clusterSizes.reduce((acc, v) => (acc + (v * v)), 0) / solutions.length;
+    score = clusterSizes.reduce((acc, v) => (acc + (v * v)), 0) / solutions.length;
   }
+  return { w: attempt.w, s: score };
 };
