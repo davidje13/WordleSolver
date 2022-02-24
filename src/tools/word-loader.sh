@@ -2,7 +2,7 @@ set -e
 
 BASE_DIR="$(dirname "$0")/../..";
 GENFILE="$BASE_DIR/src/generated-data.js";
-GENBIN="$BASE_DIR/src/tools/word-loader.js";
+GENBIN="$BASE_DIR/src/tools/word-loader.mjs";
 
 echo '// generated file' > "$GENFILE";
 echo >> "$GENFILE";
